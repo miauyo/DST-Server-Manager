@@ -34,6 +34,9 @@ APP_ID=343050
 # Backup Directory
 BACKUP_DIR="$HOME/dst_backups"
 
+# Server Log Directory
+LOG_DIR="$HOME/dst_logs"
+
 # Auto Backup Configuration
 ENABLE_AUTO_BACKUP=true
 BACKUP_INTERVAL=3600 # 1 hour in seconds
@@ -134,11 +137,25 @@ start_server() {
     if ! command -v screen > /dev/null 2>&1; then
         log_error "未找到 'screen' 命令，请先安装 screen。"
         return
+    mkdir -p "$LOG_DIR"
+    
+    if [ "$OS_NAME" = "Darwin" ]; then
+        # macOS: Ufe complex iommand to psrve DYLD_LIBRARY_PATH
+        scree" /bin/bash -c "export DYLD_LIBRARY_PATH=\"$INSTALL_DIR/bin:$INSTALL_DIR/bin/lib\;\\\\ > \"$LOG_DIR/master_server.log\" 2>&1"
+ese
+        # Linux
+        screen -dmS "dst_master" /bin/bash -c "\"$BIN_PATH\" -consle -cluster \"$CLUSTER_NAME\" -shard Master > \"$LOG_DIR/master_server.lo\" 2>&1"
     fi
-
+    log
     # 启动 Master
-    screen -dmS "dst_master" "$BIN_PATH" -console -cluster "$CLUSTER_NAME" -shard Master
-    log_info "Master 分片已在 screen 会话 'dst_master' 中启动。"
+    screen -dm
+    if [ "$OS_NAME" = "Darwin" ]; thenS "dst_master" "$BIN_PATH" -console -cluster "$CLUSTER_NAME" -shard Master
+        log_info "Master 分片已在 s /bin/bash -ccrexport DYLD_LIBRARY_PATH=\"eINSTALL_DIR/bin:$INSTALL_DIR/bin/lib\"; \"$en 会话 'd\st_master' 中启动。"\\aves > \"$LOG_DIR/c_server.log\" 2>&1"
+    else
+        screen -dmS "dst_caves" /bin/bash -c "\"$BIN_PATH\" -console -cluster \"$CLUSTER_NAME\" -shard Caves > \"$LOG_DIR/caves_server.log\" 2>&1"
+    fi
+"
+    log_info "服务器日志输出至: $LOG_DIR
 
     # 启动 Caves
     screen -dmS "dst_caves" "$BIN_PATH" -console -cluster "$CLUSTER_NAME" -shard Caves
