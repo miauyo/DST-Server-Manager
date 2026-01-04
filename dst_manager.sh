@@ -13,10 +13,13 @@ STEAMCMD_EXEC="$STEAMCMD_DIR/steamcmd.sh"
 # Game Installation Directory
 INSTALL_DIR="$HOME/dst_server"
 
+# Detect OS
+OS_NAME=$(uname -s)
+
 # Cluster Directory (Default macOS location)
 # Note: Klei's default save path on macOS is usually ~/Documents/Klei/DoNotStarveTogether
 # On Linux it is usually ~/.klei/DoNotStarveTogether
-if [[ "$OSTYPE" == "darwin"* ]]; then
+if [ "$OS_NAME" = "Darwin" ]; then
     CLUSTER_DIR="$HOME/Documents/Klei/DoNotStarveTogether"
 else
     CLUSTER_DIR="$HOME/.klei/DoNotStarveTogether"
@@ -31,6 +34,13 @@ APP_ID=343050
 # Backup Directory
 BACKUP_DIR="$HOME/dst_backups"
 
+# Auto Backup Configuration
+ENABLE_AUTO_BACKUP=true
+BACKUP_INTERVAL=3600 # 1 hour in seconds
+
+# Resolve script absolute path for auto-backup
+SCRIPT_PATH=$(cd "$(dirname "$0")"; pwd)/$(basename "$0")
+
 # ===========================================
 
 # 颜色定义
@@ -40,15 +50,15 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${GREEN}[INFO] $1${NC}"
+    printf "${GREEN}[INFO] %s${NC}\n" "$1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN] $1${NC}"
+    printf "${YELLOW}[WARN] %s${NC}\n" "$1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR] $1${NC}"
+    printf "${RED}[ERROR] %s${NC}\n" "$1"
 }
 
 # 检查依赖
@@ -58,7 +68,7 @@ check_dependencies() {
         mkdir -p "$STEAMCMD_DIR"
         cd "$STEAMCMD_DIR"
         
-        if [[ "$OSTYPE" == "darwin"* ]]; then
+        if [ "$OS_NAME" = "Darwin" ]; then
             curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz" | tar zxvf -
         else
             curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
@@ -92,7 +102,7 @@ start_server() {
     log_info "正在启动服务器 ($CLUSTER_NAME)..."
     
     # 检查可执行文件
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [ "$OS_NAME" = "Darwin" ]; then
         # macOS 可能的路径
         BIN_PATH="$INSTALL_DIR/bin/dontstarve_dedicated_server_nullrenderer.app/Contents/MacOS/dontstarve_dedicated_server_nullrenderer"
         
@@ -121,7 +131,7 @@ start_server() {
     fi
 
     # 使用 screen 或 tmux 在后台运行 (这里使用 screen)
-    if ! command -v screen &> /dev/null; then
+    if ! command -v screen > /dev/null 2>&1; then
         log_error "未找到 'screen' 命令，请先安装 screen。"
         return
     fi
@@ -133,6 +143,21 @@ start_server() {
     # 启动 Caves
     screen -dmS "dst_caves" "$BIN_PATH" -console -cluster "$CLUSTER_NAME" -shard Caves
     log_info "Caves 分片已在 screen 会话 'dst_caves' 中启动。"
+
+    # 启动自动备份
+    if [ "$ENABLE_AUTO_BACKUP" = "true" ]; then
+         if screen -list | grep -q "dst_backup"; then
+             log_warn "自动备份进程已在运行。"
+         else
+             # Ensure script is executable
+             if [ ! -x "$SCRIPT_PATH" ]; then
+                 chmod +x "$SCRIPT_PATH"
+             fi
+             
+             screen -dmS "dst_backup" /bin/bash -c "while true; do sleep $BACKUP_INTERVAL; \"$SCRIPT_PATH\" backup; done"
+             log_info "自动备份已启动 (间隔: ${BACKUP_INTERVAL}秒)。"
+         fi
+    fi
 }
 
 # 停止服务器
@@ -185,15 +210,15 @@ backup_server() {
 # 查看状态
 status_server() {
     if screen -list | grep -q "dst_master"; then
-        echo -e "Master: ${GREEN}运行中${NC}"
+        printf "Master: ${GREEN}运行中${NC}\n"
     else
-        echo -e "Master: ${RED}未运行${NC}"
+        printf "Master: ${RED}未运行${NC}\n"
     fi
     
     if screen -list | grep -q "dst_caves"; then
-        echo -e "Caves:  ${GREEN}运行中${NC}"
+        printf "Caves:  ${GREEN}运行中${NC}\n"
     else
-        echo -e "Caves:  ${RED}未运行${NC}"
+        printf "Caves:  ${RED}未运行${NC}\n"
     fi
 }
 
@@ -210,7 +235,8 @@ show_menu() {
     echo "6. 查看状态 (Status)"
     echo "0. 退出 (Exit)"
     echo "=============================="
-    read -p "请输入选项: " choice
+    printf "请输入选项: "
+    read choice
     
     case $choice in
         1) start_server ;;
@@ -240,7 +266,7 @@ else
     # 否则显示交互菜单
     while true; do
         show_menu
-        echo "按任意键继续..."
-        read -n 1
+        echo "按回车键继续..."
+        read dummy
     done
 fi
